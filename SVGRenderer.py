@@ -20,6 +20,33 @@ class SVGRenderer:
                 self.image[x][y][1] = color[1]
                 self.image[x][y][2] = color[2]
 
+    def besierLine(self, x1, y1, x2, y2):
+        t = 0.0
+        while t < 1:
+            x = round((1-t)*x1 + t*x2)
+            y = round((1-t)*y1 + t*y2)
+            self.putPixel(x, y, 255)
+            t += 0.001
+    
+    def quadraticBesierCurve(self, x1, y1, xc, yc, x2, y2):
+        t = 0.0
+        while t < 1:
+            
+            x = round( ((1-t)**2)*x1 + 2*(1-t)*t*xc + (t**2)*x2 )
+            y = round( ((1-t)**2)*y1 + 2*(1-t)*t*yc +(t**2)*y2 )
+            self.putPixel(x, y, 255)
+            t += 0.001
+
+    def cubicBesierCurve(self, x1, y1, xc1, yc1, xc2, yc2, x2, y2):
+        t = 0.0
+        while t < 1:
+            
+            x = round( ((1-t)**3)*x1 + 3*((1-t)**2)*t*xc1 + 3*(1-t)*(t**2)*xc2 + (t**3)*x2 )
+            y = round( ((1-t)**3)*y1 + 3*((1-t)**2)*t*yc1 + 3*(1-t)*(t**2)*yc2 + (t**3)*y2 )
+            self.putPixel(x, y, 255)
+            t += 0.001
+            
+
     # https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
     def line(self, x1, y1, x2, y2):
         dx =  abs(x2-x1)
@@ -111,8 +138,9 @@ class SVGRenderer:
                 d2 = d2 + dx - dy + (rx * rx)
 
     def drawSVG(self):
-        self.rectangle(10, 10, 300, 300)
-        self.ellipse(700,200, 500, 500)
+        self.besierLine(130*5, 10*5, 120*5, 20*5)
+        self.besierLine(180*5, 20*5, 170*5, 10*5)
+        self.cubicBesierCurve(130*5, 10*5, 120*5, 20*5, 180*5, 20*5, 170*5, 10*5)
         f = open('swatch.png', 'wb')
         w = png.Writer(self.size[0], self.size[1], greyscale=True)
         

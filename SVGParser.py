@@ -1,5 +1,13 @@
-
+import xml.etree.ElementTree as ET
 
 class SVGParser:
-    def __init__(self):
-        pass
+    @staticmethod
+    def parseXML(svgFile):
+        tree = ET.parse( svgFile )
+        root = tree.getroot()
+        return root
+
+
+if __name__ == "__main__":
+    
+    SVGParser.parseXML('svgTest.svg')

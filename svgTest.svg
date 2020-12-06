@@ -1,4 +1,8 @@
 <svg width="400" height="400">
-<path d="M 10 80 Q 95 10 180 80" stroke="black" fill="transparent"/>
+<path d="M 10 10 H 90 V 90 Z"/>
+    <circle cx="10" cy="10" r="2" fill="red"/>
+  <circle cx="90" cy="90" r="2" fill="red"/>
+  <circle cx="90" cy="10" r="2" fill="red"/>
+  <circle cx="10" cy="90" r="2" fill="red"/>
 
 </svg>

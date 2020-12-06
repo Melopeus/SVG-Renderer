@@ -7,7 +7,7 @@ class SVGConverter:
         root = SVGParser.parseXML('svgTest.svg')
         width = int(root.attrib['width'])
         height = int(root.attrib['height'])
-        rendered = SVGRenderer((width,height), colorSpace='grayscale')
+        rendered = SVGRenderer((width,height))
         rendered.drawSVG(name, root)
 
 

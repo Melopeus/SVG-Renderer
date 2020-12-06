@@ -2,29 +2,34 @@ import numpy as np
 import png
 
 class SVGRenderer:
-    def __init__(self, size, colorSpace="rgb"):
-        if colorSpace == 'grayscale':
-            self.image = np.zeros(size, dtype='uint8')
-        elif colorSpace == 'rgb':
-            self.image = np.zeros((*size, 3), dtype='uint8')
-        self.colorSpace = colorSpace
+    def __init__(self, size):
+        self.image = np.zeros((*size, 3), dtype='uint8')
         self.size = size
+        self.strokeColor = (55,45,166)
+        
 
-    def putPixel(self, x: int, y: int, color):
-        if 0 < x < self.size[0] and 0 < y < self.size[1]:
-            if self.colorSpace == 'grayscale':
-                self.image[y][x] = color
-            else:
-                self.image[x][y][0] = color[0]
-                self.image[x][y][1] = color[1]
-                self.image[x][y][2] = color[2]
+    #def setStyle(self, stroke, strokeWidth, fill):
+#
+    #    self.style.update(
+    #        {
+    #        "stroke":stroke,
+    #        "stroke-width":strokeWidth,
+    #        "fill":fill
+    #        }
+    #    )
+
+    def putPixel(self, x: int, y: int):
+        if 0 <= x < self.size[0] and 0 <= y < self.size[1]:
+            self.image[y][x][0] = self.strokeColor[0]
+            self.image[y][x][1] = self.strokeColor[1]
+            self.image[y][x][2] = self.strokeColor[2]
 
     def besierLine(self, x1, y1, x2, y2):
         t = 0.0
         while t < 1:
             x = round((1-t)*x1 + t*x2)
             y = round((1-t)*y1 + t*y2)
-            self.putPixel(x, y, 255)
+            self.putPixel(x, y)
             t += 0.001
     
     def quadraticBesierCurve(self, x1, y1, xc, yc, x2, y2):
@@ -33,7 +38,7 @@ class SVGRenderer:
             
             x = round( ((1-t)**2)*x1 + 2*(1-t)*t*xc + (t**2)*x2 )
             y = round( ((1-t)**2)*y1 + 2*(1-t)*t*yc +(t**2)*y2 )
-            self.putPixel(x, y, 255)
+            self.putPixel(x, y)
             t += 0.001
 
     def cubicBesierCurve(self, x1, y1, xc1, yc1, xc2, yc2, x2, y2):
@@ -42,7 +47,7 @@ class SVGRenderer:
             
             x = round( ((1-t)**3)*x1 + 3*((1-t)**2)*t*xc1 + 3*(1-t)*(t**2)*xc2 + (t**3)*x2 )
             y = round( ((1-t)**3)*y1 + 3*((1-t)**2)*t*yc1 + 3*(1-t)*(t**2)*yc2 + (t**3)*y2 )
-            self.putPixel(x, y, 255)
+            self.putPixel(x, y)
             t += 0.001         
 
 # https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
@@ -53,7 +58,7 @@ class SVGRenderer:
         sy = 1 if y1<y2 else -1
         err = dx+dy
         while True:
-            self.putPixel(x1, y1,255)
+            self.putPixel(x1, y1)
 
             #self.putPixel(x1+1, y1,255)
             #self.putPixel(x1-1, y1,255)
@@ -94,10 +99,10 @@ class SVGRenderer:
         while (dx < dy):  
         
             # Print points based on 4-way symmetry  
-            self.putPixel( x + xc, y + yc , 255)
-            self.putPixel(-x + xc, y + yc , 255)
-            self.putPixel( x + xc,-y + yc , 255)
-            self.putPixel(-x + xc,-y + yc , 255)
+            self.putPixel( x + xc, y + yc)
+            self.putPixel(-x + xc, y + yc)
+            self.putPixel( x + xc,-y + yc)
+            self.putPixel(-x + xc,-y + yc)
     
             # Checking and updating value of  
             # decision parameter based on algorithm  
@@ -121,10 +126,10 @@ class SVGRenderer:
         while (y >= 0): 
         
             # printing points based on 4-way symmetry  
-            self.putPixel( x + xc, y + yc , 255)
-            self.putPixel(-x + xc, y + yc , 255)
-            self.putPixel( x + xc,-y + yc , 255)
-            self.putPixel(-x + xc,-y + yc , 255)
+            self.putPixel( x + xc, y + yc)
+            self.putPixel(-x + xc, y + yc)
+            self.putPixel( x + xc,-y + yc)
+            self.putPixel(-x + xc,-y + yc)
     
             # Checking and updating parameter  
             # value based on algorithm  
@@ -144,13 +149,14 @@ class SVGRenderer:
 
     def drawSVG(self, name, root):
         f = open( name, 'wb')
-        w = png.Writer(self.size[0], self.size[1], greyscale=True)
+        w = png.Writer(self.size[0], self.size[1], greyscale=False)
         penY = 0
         penX = 0
 
         
         
         for child in root:
+            # get style options
             if child.tag == 'rect':
                 try:
                     width = int(child.attrib.get('width'))
@@ -359,7 +365,7 @@ class SVGRenderer:
                             penY = newY2
                 except AssertionError as e:
                     print(e)
-
+        self.image = self.image.reshape(self.size[0], self.size[1]*3)
         w.write(f, self.image)
         f.close()
 

@@ -5,7 +5,8 @@ class SVGRenderer:
     def __init__(self, size):
         self.image = np.zeros((*size, 3), dtype='uint8')
         self.size = size
-        self.strokeColor = (55,45,166)
+        self.strokeColor = (40,255,255)
+        self.strokeWidth = 5
         
 
     #def setStyle(self, stroke, strokeWidth, fill):
@@ -17,12 +18,16 @@ class SVGRenderer:
     #        "fill":fill
     #        }
     #    )
-
     def putPixel(self, x: int, y: int):
-        if 0 <= x < self.size[0] and 0 <= y < self.size[1]:
-            self.image[y][x][0] = self.strokeColor[0]
-            self.image[y][x][1] = self.strokeColor[1]
-            self.image[y][x][2] = self.strokeColor[2]
+        x_start = x - self.strokeWidth//2    # I draw instead of a point, a square like in
+        y_start = y - ( self.strokeWidth-1 - self.strokeWidth//2 ) # 
+        for i in range(self.strokeWidth):
+            for j in range(self.strokeWidth):
+                if 0 <= x_start+i < self.size[1] and 0 <= y_start+j < self.size[0]:
+                    
+                    self.image[y_start+j][x_start+i][0] = self.strokeColor[0]
+                    self.image[y_start+j][x_start+i][1] = self.strokeColor[1]
+                    self.image[y_start+j][x_start+i][2] = self.strokeColor[2]
 
     def besierLine(self, x1, y1, x2, y2):
         t = 0.0
@@ -149,7 +154,7 @@ class SVGRenderer:
 
     def drawSVG(self, name, root):
         f = open( name, 'wb')
-        w = png.Writer(self.size[0], self.size[1], greyscale=False)
+        w = png.Writer(self.size[1], self.size[0], greyscale=False)
         penY = 0
         penX = 0
 
@@ -170,6 +175,9 @@ class SVGRenderer:
                     self.rectangle(x, y, width, height)
                 except AssertionError as e:
                     print(e)
+            elif child.tag == 'test':
+                self.putPixel(10,10)
+                self.circle(50,50,30)
             elif child.tag == 'circle':
                 try:
                     r = child.attrib.get('r')
@@ -234,7 +242,9 @@ class SVGRenderer:
                     "C": 6,
                     "c": 6,
                     "Q": 4,
-                    "q": 4
+                    "q": 4,
+                    "S": 4,
+                    "s": 4
                 }
                 try:
                     d = child.attrib.get('d')
@@ -243,127 +253,225 @@ class SVGRenderer:
                     commandCount = 0
                     initialX = penX
                     initialY = penY
+                    cubicBesierLastPoint_X = None
+                    cubicBesierLastPoint_Y = None
                     while len(d) > 0:
                         command = d.pop(0)
                         commandCount += 1
-                        assert pathDCommandsLookAhead.get(command) != None, "Wrong or unsupported command: "+ command
+                        if pathDCommandsLookAhead.get(command) == None:
+                            print("Wrong or unsupported command: "+ command)
+                            continue
                         if command == "M":
                             assert commandCount == 1, "Wrong format for path d attribute for " + command + " command. M can be just first in d attribute"
                             newPenX = d.pop(0)
                             newPenY = d.pop(0)
-                            assert newPenX.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            assert newPenY.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            initialX = penX = int(newPenX)
-                            initialY = penY = int(newPenY)
+                            try:
+                                initialX = penX = int(float(newPenX.strip(',')))
+                                initialY = penY = int(float(newPenY.strip(',')))
+                                cubicBesierLastPoint_X = penX
+                                cubicBesierLastPoint_Y = penY
+                            except ValueError as ve:
+                                print("Error in command " + command)
+                                raise ve
+                            
                         elif command == "L":  # line with x y parameters (absolute)
-                            newX2 = d.pop(0)
-                            newY2 = d.pop(0)
-                            assert newX2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            assert newY2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            newX2 = int(newX2)
-                            newY2 = int(newY2)
+                            newX2 = d.pop(0).strip(',')
+                            newY2 = d.pop(0).strip(',')
+                            try:
+                                newX2 = int(float(newX2))
+                                newY2 = int(float(newY2))
+                            except ValueError as ve:
+                                print("Error in command " + command)
+                                raise ve
+                            
                             self.line(penX, penY, newX2, newY2)
                             penX = newX2
                             penY = newY2
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
                         elif command == "l":  # line with delta x delta y parameters (relative)
-                            dX2 = d.pop(0)
-                            dY2 = d.pop(0)
-                            assert dX2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            assert dY2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            dX2 = int(dX2)
-                            dY2 = int(dY2)
+                            dX2 = d.pop(0).strip(',')
+                            dY2 = d.pop(0).strip(',')
+                            try:
+                                dX2 = int(float(dX2))
+                                dY2 = int(float(dY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
                             self.line(penX, penY, penX + dX2, penY + dY2)
                             penX = penX + dX2
                             penY = penY + dY2
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
                         elif command == 'H':
-                            newX2 = d.pop(0)
-                            assert newX2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            newX2 = int(newX2)
+                            newX2 = d.pop(0).strip(',')
+                            try:
+                                newX2 = int(float(newX2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
                             self.line( penX, penY, newX2, penY )
                             penX = newX2
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
                         elif command == 'h':
-                            dX2 = d.pop(0)
-                            assert dX2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            dX2 = int(dX2)
+                            dX2 = d.pop(0).strip(',')
+                            try:
+                                dX2 = int(float(dX2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
                             self.line( penX, penY, penX + dX2, penY )
                             penX = penX + dX2
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
                         elif command == 'V':
-                            newY2 = d.pop(0)
-                            assert newY2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            newY2 = int(newX2)
+                            newY2 = d.pop(0).strip(',')
+                            try:
+                                newY2 = int(float(newY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
                             self.line( penX, penY, penX, newY2 )
                             penY = newY2
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
                         elif command == 'v':
-                            dY2 = d.pop(0)
-                            assert dY2.isnumeric(), "Wrong format for path d attribute for " + command + " command"
-                            dY2 = int(dY2)
+                            dY2 = d.pop(0).strip(',')
+                            try:
+                                dY2 = int(float(dY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
                             self.line( penX, penY, penX, penY + dY2 )
                             penY = penY + dY2
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
                         elif command == 'z' or command == 'Z':
                             self.line(penX, penY, initialX, initialY)
                             penX = initialX
                             penY = initialY
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
                         elif command == 'C':
-                            controlX1 = d.pop(0)
-                            controlY1 = d.pop(0)
-                            controlX2 = d.pop(0)
-                            controlY2 = d.pop(0)
-                            newX2 = d.pop(0)
-                            newY2 = d.pop(0)
-                            assert (controlX1.isnumeric() and
-                                    controlY1.isnumeric() and
-                                    controlX2.isnumeric() and
-                                    controlY2.isnumeric() and
-                                    newX2.isnumeric() and
-                                    newY2.isnumeric()), "Wrong format for path d attribute for " + command + " command"
-                            controlX1 = int(controlX1)
-                            controlY1 = int(controlY1)
-                            controlX2 = int(controlX2)
-                            controlY2 = int(controlY2)
-                            newX2 = int(newX2)
-                            newY2 = int(newY2)
+                            controlX1 = d.pop(0).strip(',')
+                            controlY1 = d.pop(0).strip(',')
+                            controlX2 = d.pop(0).strip(',')
+                            controlY2 = d.pop(0).strip(',')
+                            newX2 = d.pop(0).strip(',')
+                            newY2 = d.pop(0).strip(',')
+                            try:
+                                controlX1 = int(float(controlX1))
+                                controlY1 = int(float(controlY1))
+                                controlX2 = int(float(controlX2))
+                                controlY2 = int(float(controlY2))
+                                newX2 = int(float(newX2))
+                                newY2 = int(float(newY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
                             self.cubicBesierCurve(penX, penY, controlX1, controlY1, controlX2, controlY2, newX2, newY2)
+                            cubicBesierLastPoint_X = 2*newX2 - controlX2 # calculate reflexion of the control_point2 by the point (newX2, newY2)
+                            cubicBesierLastPoint_Y = 2*newY2 - controlY2 # calculate reflexion 
                             penX = newX2
                             penY = newY2
-                        #elif command == 'c':   I don't understand this
-                        #    control_dX1 = d.pop(0)
-                        #    control_dY1 = d.pop(0)
-                        #    control_dX2 = d.pop(0)
-                        #    control_dY2 = d.pop(0)
-                        #    newX2 = d.pop(0)
-                        #    newY2 = d.pop(0)
-                        #    assert (control_dX1.isnumeric() and
-                        #            control_dY1.isnumeric() and
-                        #            control_dX2.isnumeric() and
-                        #            control_dY2.isnumeric() and
-                        #            newX2.isnumeric() and
-                        #            newY2.isnumeric()), "Wrong format for path d attribute for " + command + " command"
-                        #    control_dX1 = int(control_dX1)
-                        #    control_dY1 = int(control_dY1)
-                        #    control_dX2 = int(control_dX2)
-                        #    control_dY2 = int(control_dY2)
-                        #    newX2 = int(newX2)
-                        #    newY2 = int(newY2)
-                        #    self.cubicBesierCurve(penX, penY, control_dX1, control_dY1, control_dX2, control_dY2, newX2, newY2)
-                        #    penX = newX2
-                        #    penY = newY2
-                        elif command == "Q":
-                            control_X1 = d.pop(0)
-                            control_Y1 = d.pop(0)
+                        elif command == 'c':
+                            control_dX1 = d.pop(0).strip(',')
+                            control_dY1 = d.pop(0).strip(',')
+                            control_dX2 = d.pop(0).strip(',')
+                            control_dY2 = d.pop(0).strip(',')
+                            dX2 = d.pop(0).strip(',')
+                            dY2 = d.pop(0).strip(',')
+                            try:
+                                control_dX1 = int(float(control_dX1))
+                                control_dY1 = int(float(control_dY1))
+                                control_dX2 = int(float(control_dX2))
+                                control_dY2 = int(float(control_dY2))
+                                dX2 = int(float(dX2))
+                                dY2 = int(float(dY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
+                            self.cubicBesierCurve(penX, penY, penX + control_dX1, penY + control_dY1, penX + control_dX2, penY + control_dY2, penX + dX2, penY + dY2)
+                            cubicBesierLastPoint_X = 2*(penX + dX2) - (penX + control_dX2) # calculate reflexion
+                            cubicBesierLastPoint_Y = 2*(penY + dY2) - (penY + control_dY2) # calculate reflexion
+                            penX = penX + dX2
+                            penY = penY + dY2
+                        elif command == "S":
+                            assert cubicBesierLastPoint_X != None and cubicBesierLastPoint_Y != None, "Can't use S command, no last point found. Use C before it."
+                            control_X2 = d.pop(0).strip(',')
+                            control_Y2 = d.pop(0).strip(',')
                             newX2 = d.pop(0)
                             newY2 = d.pop(0)
-                            assert (control_X1.isnumeric() and
-                                    control_Y1.isnumeric() and
-                                    newX2.isnumeric() and
-                                    newY2.isnumeric()), "Wrong format for path d attribute for " + command + " command"
-                            control_X1 = int(control_X1)
-                            control_Y1 = int(control_Y1)
-                            newX2 = int(newX2)
-                            newY2 = int(newY2)
+                            try:
+                                control_X2 = int(float(control_X2))
+                                control_Y2 = int(float(control_Y2))
+                                newX2 = int(float(newX2))
+                                newY2 = int(float(newY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
+                            self.cubicBesierCurve(penX, penY, cubicBesierLastPoint_X, cubicBesierLastPoint_Y, control_X2, control_Y2, newX2, newY2)
+                            cubicBesierLastPoint_X = 2*newX2 - control_X2
+                            cubicBesierLastPoint_Y = 2*newY2 - control_Y2
+                            penX = newX2
+                            penY = newY2
+                        elif command == "s":
+                            assert cubicBesierLastPoint_X != None and cubicBesierLastPoint_Y != None, "Can't use S command, no last point found. Use C before it."
+                            control_dX2 = d.pop(0).strip(',')
+                            control_dY2 = d.pop(0).strip(',')
+                            dX2 = d.pop(0).strip(',')
+                            dY2 = d.pop(0).strip(',')
+                            try:
+                                control_dX2 = int(float(control_dX2))
+                                control_dY2 = int(float(control_dY2))
+                                dX2 = int(float(dX2))
+                                dY2 = int(float(dY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
+                            self.cubicBesierCurve(penX, penY, cubicBesierLastPoint_X, cubicBesierLastPoint_Y, penX + control_dX2, penY + control_dY2, penX + dX2, penY + dY2)
+                            cubicBesierLastPoint_X = 2*(penX + dX2) - (penX + control_dX2) # calculate reflexion of the control point by the end point of the curve
+                            cubicBesierLastPoint_Y = 2*(penY + dY2) - (penY + control_dY2) # calculate reflexion 
+                            penX = penX + dX2
+                            penY = penY + dY2
+                        elif command == "Q":
+                            control_X1 = d.pop(0).strip(',')
+                            control_Y1 = d.pop(0).strip(',')
+                            newX2 = d.pop(0).strip(',')
+                            newY2 = d.pop(0).strip(',')
+                            try:
+                                control_X1 = int(float(control_X1))
+                                control_Y1 = int(float(control_Y1))
+                                newX2 = int(float(newX2))
+                                newY2 = int(float(newY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
                             self.quadraticBesierCurve(penX, penY, control_X1, control_Y1, newX2, newY2)
                             penX = newX2
                             penY = newY2
-                except AssertionError as e:
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
+                        elif command == 'q':
+                            control_dX1 = d.pop(0).strip(',')
+                            control_dY1 = d.pop(0).strip(',')
+                            dX2 = d.pop(0).strip(',')
+                            dY2 = d.pop(0).strip(',')
+                            try:
+                                control_dX1 = int(float(control_dX1))
+                                control_dY1 = int(float(control_dY1))
+                                dX2 = int(float(dX2))
+                                dY2 = int(float(dY2))
+                            except Exception as ve:
+                                print("Error in command " + command)
+                                raise ve
+                            self.quadraticBesierCurve(penX, penY, penX + control_dX1, penY + control_dY1, penX + dX2, penY + dY2)
+                            penX = penX + dX2
+                            penY = penY + dY2
+                            cubicBesierLastPoint_X = penX
+                            cubicBesierLastPoint_Y = penY
+                except Exception as e:
                     print(e)
         self.image = self.image.reshape(self.size[0], self.size[1]*3)
         w.write(f, self.image)

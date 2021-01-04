@@ -1,5 +1,6 @@
 import numpy as np
 import png
+import re
 
 
 class SVGRenderer:
@@ -13,6 +14,10 @@ class SVGRenderer:
         self.strokeColor = (40, 255, 255)
         self.fillColor = (100, 20, 250)
         self.strokeWidth = 2
+        self.max_x = 0
+        self.max_y = 0
+        self.min_x = self.size[0]
+        self.min_y = self.size[1]
 
     # def setStyle(self, stroke, strokeWidth, fill):
     #
@@ -31,7 +36,7 @@ class SVGRenderer:
         :param y: The y location of the pixel
         :return: (r,g,b) tuple of the color
         """
-        return tuple(self.image[y][x])
+        return tuple(self.image[x][y])
 
     def put_pixel(self, x: int, y: int, **kwargs):
         """
@@ -50,7 +55,8 @@ class SVGRenderer:
                 pass
         else:
             color = self.strokeColor
-            x_start = x - self.strokeWidth // 2  # I draw instead of a point, a square like in
+            # I draw instead of a point, a square like in
+            x_start = x - self.strokeWidth // 2
             y_start = y - (self.strokeWidth - 1 - self.strokeWidth // 2)
             for i in range(self.strokeWidth):
                 for j in range(self.strokeWidth):
@@ -59,30 +65,36 @@ class SVGRenderer:
                             self.image[y_start + j][x_start + i][0] = color[0]
                             self.image[y_start + j][x_start + i][1] = color[1]
                             self.image[y_start + j][x_start + i][2] = color[2]
+                            if self.max_x < x_start + i:
+                                self.max_x = x_start + i
+                            if self.max_y < y_start + j:
+                                self.max_y = y_start + j
+                            if self.min_x > x_start + i:
+                                self.min_x = x_start + i
+                            if self.min_y > y_start + j:
+                                self.min_y = y_start + j
                         except Exception:
                             pass
+
     def is_in_bounds(self, point):
         if point[0] >= 0 and point[1] >= 0 \
-            and point[0] < self.size[0] and point[1] < self.size[1]:
+                and point[0] < self.size[0] and point[1] < self.size[1]:
             return True
         return False
 
     def flood_fill(self, start_point):
         toFill = set([start_point])
         while len(toFill) != 0:
-            print(len(toFill), flush=True)
             position = toFill.pop()
             if self.get_pixel_color(*position) == self.fillColor:
                 continue
-            self.put_pixel(position[0], position[1], color = 'fill')
+            self.put_pixel(position[0], position[1], color='fill')
             for t in [(-1, 0), (0, -1), (1, 0), (0, 1)]:
                 neighbor_pixel = (position[0] + t[0], position[1] + t[1])
                 if self.is_in_bounds(neighbor_pixel) and \
-                    self.get_pixel_color(*neighbor_pixel) != self.strokeColor \
-                    and self.get_pixel_color(*neighbor_pixel) != self.fillColor:
+                        self.get_pixel_color(*neighbor_pixel) != self.strokeColor \
+                        and self.get_pixel_color(*neighbor_pixel) != self.fillColor:
                     toFill.add(neighbor_pixel)
-            if len(toFill) == 2000:
-                break
 
     def bezier_line(self, x1, y1, x2, y2):
         """
@@ -113,8 +125,10 @@ class SVGRenderer:
         """
         t = 0.0
         while t < 1:
-            x = round(((1 - t) ** 2) * x1 + 2 * (1 - t) * t * xc + (t ** 2) * x2)
-            y = round(((1 - t) ** 2) * y1 + 2 * (1 - t) * t * yc + (t ** 2) * y2)
+            x = round(((1 - t) ** 2) * x1 + 2 *
+                      (1 - t) * t * xc + (t ** 2) * x2)
+            y = round(((1 - t) ** 2) * y1 + 2 *
+                      (1 - t) * t * yc + (t ** 2) * y2)
             self.put_pixel(x, y)
             t += 0.001
 
@@ -297,7 +311,7 @@ class SVGRenderer:
             ry = abs(val ** (1 / 2) * p_prim[1])
         c_prim = (abs(
             ((rx ** 2) * (ry ** 2) - (rx ** 2) * (p_prim[1] ** 2) - (ry ** 2) * (p_prim[0] ** 2)) / ((rx ** 2) * (
-                    p_prim[1] ** 2) + (ry ** 2) * (p_prim[0] ** 2)))) ** (1 / 2) * np.array(
+                p_prim[1] ** 2) + (ry ** 2) * (p_prim[0] ** 2)))) ** (1 / 2) * np.array(
             [rx * p_prim[1] / ry, -1 * ry * p_prim[0] / rx])
 
         c = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
@@ -457,8 +471,11 @@ class SVGRenderer:
                         float(child.attrib.get('x')))
                     y = pen_y if child.attrib.get('y') is None else int(
                         float(child.attrib.get('y')))
-                    #self.rectangle(x, y, width, height)
-                    self.flood_fill((x, y))
+                    self.rectangle(x, y, width, height)
+                    if width >= 2 * self.strokeWidth - 1 \
+                            and height >= 2 * self.strokeWidth - 1:
+                        self.flood_fill(
+                            (x + self.strokeWidth, y + self.strokeWidth))
                 except AssertionError as e:
                     print(e)
             elif child.tag == 'test':
@@ -473,6 +490,7 @@ class SVGRenderer:
                     cy = pen_y if child.attrib.get('cy') is None else int(
                         float(child.attrib.get('cy')))
                     self.circle(cx, cy, r)
+                    self.flood_fill((cx, cy))
                 except AssertionError as e:
                     print(e)
             elif child.tag == 'line':
@@ -505,6 +523,7 @@ class SVGRenderer:
                     cy = pen_y if child.attrib.get('cy') is None else int(
                         float(child.attrib.get('cy')))
                     self.ellipse(rx, ry, cx, cy)
+                    self.flood_fill((cx, cy))
                 except AssertionError as e:
                     print(e)
             elif child.tag == 'polyline':
@@ -525,6 +544,7 @@ class SVGRenderer:
             elif child.tag == 'path':
                 path_d_commands_look_ahead = {
                     "M": 2,
+                    "m": 2,
                     "L": 2,
                     "l": 2,
                     "H": 1,
@@ -542,26 +562,31 @@ class SVGRenderer:
                     "A": 7,
                     "a": 7
                 }
+                self.max_x = 0
+                self.max_y = 0
+                self.min_x = self.size[0]
+                self.min_y = self.size[1]
                 try:
                     d = child.attrib.get('d')
                     assert d is not None, "Wrong parameters. Skipping path."
-                    d = d.split(' ')
-                    d = [x for x in d if x != ""]
-
+                    regex = r"(?:[a-zA-Z])|(?:-[\d]+\.?[\d]+)|(?:[\d]+\.?[\d]+)|(?:[\d])"
+                    d = re.findall(regex, d)
                     command_count = 0
                     initial_x = pen_x
                     initial_y = pen_y
                     cubic_bezier_last_point_x = None
                     cubic_bezier_last_point_y = None
+                    command = ""
                     while len(d) > 0:
-                        command = d.pop(0)
                         command_count += 1
-                        if path_d_commands_look_ahead.get(command) is None:
-                            print("Wrong or unsupported command: " + command)
-                            continue
-                        if command == "M":
-                            assert command_count == 1, "Wrong format for path d attribute for " + \
-                                                       command + " command. M can be just first in d attribute"
+                        if path_d_commands_look_ahead.get(d[0]) is None:
+                            print("wow")
+                        if path_d_commands_look_ahead.get(d[0]) is not None:
+                            command = d.pop(0)
+
+                        if command == "M" or command == "m":
+                            # assert command_count == 1, "Wrong format for path d attribute for " + \
+                            #                           command + " command. M can be just first in d attribute"
                             new_pen_x = d.pop(0)
                             new_pen_y = d.pop(0)
                             try:
@@ -701,14 +726,16 @@ class SVGRenderer:
                                                     pen_x + control_d_x2, pen_y + control_d_y2, pen_x + d_x2,
                                                     pen_y + d_y2)
                             # calculate reflexion
-                            cubic_bezier_last_point_x = 2 * (pen_x + d_x2) - (pen_x + control_d_x2)
-                            cubic_bezier_last_point_y = 2 * (pen_y + d_y2) - (pen_y + control_d_y2)
+                            cubic_bezier_last_point_x = 2 * \
+                                (pen_x + d_x2) - (pen_x + control_d_x2)
+                            cubic_bezier_last_point_y = 2 * \
+                                (pen_y + d_y2) - (pen_y + control_d_y2)
                             pen_x = pen_x + d_x2
                             pen_y = pen_y + d_y2
                         elif command == "S":
                             assert cubic_bezier_last_point_x is not None and \
-                                   cubic_bezier_last_point_y is not None, "Can't use S command, no last point found. " \
-                                                                          "Use C before it. "
+                                cubic_bezier_last_point_y is not None, "Can't use S command, no last point found. " \
+                                "Use C before it. "
                             control_x2 = d.pop(0).strip(',')
                             control_y2 = d.pop(0).strip(',')
                             new_x2 = d.pop(0)
@@ -748,8 +775,10 @@ class SVGRenderer:
                                                     pen_x + control_d_x2, pen_y + control_d_y2, pen_x + d_x2,
                                                     pen_y + d_y2)
                             # calculate reflexion of the control point by the end point of the curve
-                            cubic_bezier_last_point_x = 2 * (pen_x + d_x2) - (pen_x + control_d_x2)
-                            cubic_bezier_last_point_y = 2 * (pen_y + d_y2) - (pen_y + control_d_y2)
+                            cubic_bezier_last_point_x = 2 * \
+                                (pen_x + d_x2) - (pen_x + control_d_x2)
+                            cubic_bezier_last_point_y = 2 * \
+                                (pen_y + d_y2) - (pen_y + control_d_y2)
                             pen_x = pen_x + d_x2
                             pen_y = pen_y + d_y2
                         elif command == "Q":
@@ -845,6 +874,32 @@ class SVGRenderer:
                             pen_y = pen_y + d_y2
                             cubic_bezier_last_point_x = pen_x
                             cubic_bezier_last_point_y = pen_y
+                        else:
+                            print("Unsuported Command")
+
+                    # cast rays and determine what is inside
+                    intersect_count = 0
+                    inside_countour = False
+                    step = (self.max_x - self.min_x) // 5
+                    for i in range(self.min_x + self.strokeWidth + 1, self.max_x, step):
+                        intersect_count = 0
+                        inside_countour = False
+                        for j in range(self.min_y, self.max_y):
+                            #self.put_pixel(j,i, color='fill')
+                            current_pixel_color = self.get_pixel_color(j, i)
+                            if current_pixel_color == self.strokeColor:
+                                if inside_countour == False:
+                                    intersect_count += 1
+                                    inside_countour = True
+                            else:
+                                if inside_countour == True:
+                                    inside_countour = False
+                                    if intersect_count % 2 == 1 and current_pixel_color != self.fillColor:
+                                        #self.put_pixel(j,i, color='fill')
+                                        self.flood_fill((j,i))
+                                        pass
+                    # imprecise. 
+
                 except Exception as e:
                     print(e)
         self.image = self.image.reshape(self.size[0], self.size[1] * 3)

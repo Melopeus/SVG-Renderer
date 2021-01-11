@@ -10,6 +10,7 @@ class SVGRenderer:
         :param size: A tuple (height, width) \n
         """
         self.image = np.zeros((*size, 3), dtype='uint8')
+        self.final_image = np.zeros((*size, 3), dtype='uint8')
         self.size = size
         self.strokeColor = (40, 255, 255)
         self.fillColor = (100, 20, 250)
@@ -19,19 +20,9 @@ class SVGRenderer:
         self.min_x = self.size[0]
         self.min_y = self.size[1]
 
-    # def setStyle(self, stroke, strokeWidth, fill):
-    #
-    #    self.style.update(
-    #        {
-    #        "stroke":stroke,
-    #        "stroke-width":strokeWidth,
-    #        "fill":fill
-    #        }
-    #    )
-
     def get_pixel_color(self, x, y):
         """
-        Gets the color of a pixel.
+        Gets the color of a pixel as (x,y) position.
         :param x: The x location of the pixel
         :param y: The y location of the pixel
         :return: (r,g,b) tuple of the color
@@ -77,12 +68,20 @@ class SVGRenderer:
                             pass
 
     def is_in_bounds(self, point):
+        """
+        Tests if a point is inside the bound of the picture \n
+        :param point: tuple of int
+        """
         if point[0] >= 0 and point[1] >= 0 \
                 and point[0] < self.size[0] and point[1] < self.size[1]:
             return True
         return False
 
     def flood_fill(self, start_point):
+        """
+        Fills an area of the picture with fill_color \n
+        :param start_point: position of the start pixel \n
+        """
         toFill = set([start_point])
         while len(toFill) != 0:
             position = toFill.pop()
@@ -459,6 +458,26 @@ class SVGRenderer:
 
         for child in root:
             # get style options
+            print('stop')
+            if child.attrib.get('fill') is not None:
+                color = child.attrib['fill'].split(',')
+                self.fillColor = tuple([int(x) for x in color])
+            else:
+                self.fillColor = (0,0,0)
+
+            if child.attrib.get('stroke-width') is not None:
+                self.strokeWidth = int(child.attrib['stroke-width'])
+            else:
+                self.strokeWidth = 2
+
+            if child.attrib.get('stroke') is not None:
+                color = child.attrib['stroke'].split(',')
+                self.strokeColor = tuple([int(x) for x in color])
+            else:
+                self.strokeColor = (255,255,255)
+
+            # reset canvas layer
+            self.image.fill(0)
             if child.tag == 'rect':
                 try:
                     width = int(float(child.attrib.get('width')))
@@ -877,15 +896,15 @@ class SVGRenderer:
                         else:
                             print("Unsuported Command")
 
-                    # cast rays and determine what is inside
+                    # cast rays and determine what is inside/outside
                     intersect_count = 0
                     inside_countour = False
-                    step = (self.max_x - self.min_x) // 5
+                    step = (self.max_x - self.min_x) // 3
                     for i in range(self.min_x + self.strokeWidth + 1, self.max_x, step):
                         intersect_count = 0
                         inside_countour = False
                         for j in range(self.min_y, self.max_y):
-                            #self.put_pixel(j,i, color='fill')
+                            #self.put_pixel(j,i, color='fill')   # uncoment to see the rays casted
                             current_pixel_color = self.get_pixel_color(j, i)
                             if current_pixel_color == self.strokeColor:
                                 if inside_countour == False:
@@ -895,13 +914,18 @@ class SVGRenderer:
                                 if inside_countour == True:
                                     inside_countour = False
                                     if intersect_count % 2 == 1 and current_pixel_color != self.fillColor:
-                                        #self.put_pixel(j,i, color='fill')
+                                        #self.put_pixel(j,i, color='fill')  # uncoment to see the point of start fill
                                         self.flood_fill((j,i))
                                         pass
                     # imprecise. 
 
                 except Exception as e:
                     print(e)
-        self.image = self.image.reshape(self.size[0], self.size[1] * 3)
-        w.write(f, self.image)
+            # copy layer on the actual canvas
+            for i in range(self.size[0]):
+                for j in range(self.size[1]):
+                    self.final_image[i][j] = self.final_image[i][j] if np.sum(self.image[i][j]) == 0 else self.image[i][j]
+
+        self.final_image = self.final_image.reshape(self.size[0], self.size[1] * 3)
+        w.write(f, self.final_image)
         f.close()
